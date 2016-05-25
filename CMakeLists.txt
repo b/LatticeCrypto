@@ -1,0 +1,100 @@
+cmake_minimum_required( VERSION 3.0.1 )
+project( LatticeCrypto )
+include( CheckIncludeFiles )
+
+set( EXECUTABLE_OUTPUT_PATH bin )
+set( LIBRARY_OUTPUT_PATH lib )
+
+set( CMAKE_BUILD_TYPE Release )
+set( CMAKE_SKIP_BUILD_RPATH true )
+set( CMAKE_C_STANDARD 99 )
+set( CMAKE_C_FLAGS "-Wall -Wextra -pedantic -O3")
+
+# Architecture detection courtesy of BoringSSL
+if (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64")
+    set(ARCHITECTURE "_AMD64_")
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "amd64")
+    set(ARCHITECTURE "_AMD64_")
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "AMD64")
+    # cmake reports AMD64 on Windows, but we might be building for 32-bit.
+    if (CMAKE_CL_64)
+	set(ARCHITECTURE "_AMD64_")
+    else()
+	set(ARCHITECTURE "_X86_")
+    endif()
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86")
+    set(ARCHITECTURE "_X86_")
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "i386")
+    set(ARCHITECTURE "_X86_")
+elseif (${CMAKE_SYSTEM_PROCESSOR} STREQUAL "i686")
+    set(ARCHITECTURE "_X86_")
+elseif (${CMAKE_SYSTEM_PROCESSOR} MATCHES "^arm")
+    set(ARCHITECTURE "_ARM_")
+else()
+    message(FATAL_ERROR "Unknown processor:" ${CMAKE_SYSTEM_PROCESSOR})
+endif()
+
+if( ${ARCHITECTURE} STREQUAL "_ARM_" )
+    set( TARGET 3 )
+elseif( ${ARCHITECTURE} STREQUAL "_X86_" )
+    set( TARGET 2 )
+elseif( ${ARCHITECTURE} STREQUAL "_AMD64_" )
+    set( TARGET 1 )
+endif()
+
+if( ${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin" )
+    set( OS_TARGET 3 )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOS_UNIX" )
+elseif( ${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Linux" )
+    set( OS_TARGET 2 )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DOS_UNIX -D_POSIX_C_SOURCES=200809L" )
+elseif( ${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Windows" )
+    set( OS_TARGET 1 )
+endif( ${CMAKE_HOST_SYSTEM_NAME} STREQUAL "Darwin" )
+
+message(STATUS "Building for ${CMAKE_SYSTEM_NAME}/${ARCHITECTURE}")
+
+if( ${CMAKE_C_COMPILER_ID} MATCHES "Clang" )
+    set( COMPILER 3 )
+elseif( ${CMAKE_C_COMPILER_ID} STREQUAL "GNU" )
+    set( COMPILER 2 )
+elseif( ${CMAKE_C_COMPILER_ID} STREQUAL "MSVC" )
+    set( COMPILER 1 )
+endif( ${CMAKE_C_COMPILER_ID} MATCHES "Clang" )
+
+message(STATUS "Compiling with ${COMPILER} (${CMAKE_C_COMPILER_ID})")
+
+check_include_files(malloc.h HAVE_MALLOC_H)
+
+set( LIB_SOURCES kex.c random.c ntt_constants.c )
+
+option( GENERIC "Enable C-based implementation" "true" )
+option( EXTENDED "Enable extended" "false" )
+option( ASM "Enable x86_64 optimized assembler" "false" )
+option( AVX2 "Enable AVX2 optimized assembler (requires ASM)" "false" )
+
+if( ${EXTENDED} STREQUAL "true" )
+    set( CMAKE_C_FLAGS "-fwrapv -fomit-frame-pointer -march=native ${CMAKE_C_FLAGS}" )
+endif( ${EXTENDED} STREQUAL "true" )
+
+if( ${ASM} STREQUAL "true" )
+    if( NOT ${ARCHITECTURE} STREQUAL "_AMD64_" )
+	message( FATAL_ERROR "Optimized assembler implementation is only available on x86_64" )
+    endif( NOT ${ARCHITECTURE} STREQUAL "_AMD64_" )
+
+    if( ${AVX2} STREQUAL "true" )
+	set(CMAKE_C_FLAGS "-mavx2 ${CMAKE_C_FLAGS} -D _AVX2_" )
+    endif(${AVX2} STREQUAL "true" )
+
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D _ASM_" )
+    set( LIB_SOURCES ${LIB_SOURCES} AMD64/ntt_x64.c AMD64/ntt_x64_asm.S AMD64/error_asm.S AMD64/consts.c )
+else( )
+    set( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D _GENERIC_" )
+    set( LIB_SOURCES ${LIB_SOURCES} generic/ntt.c )
+endif( )
+
+add_library( LatticeCrypto SHARED ${LIB_SOURCES} )
+configure_file( ${CMAKE_SOURCE_DIR}/config.h.cmake ${CMAKE_SOURCE_DIR}/config.h )
+
+add_executable( tests tests/tests.c tests/test_extras.c )
+target_link_libraries( tests LatticeCrypto )

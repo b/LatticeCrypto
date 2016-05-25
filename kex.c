@@ -16,7 +16,11 @@
 ******************************************************************************************/ 
 
 #include "LatticeCrypto_priv.h"
+#ifdef HAVE_MALLOC_H
 #include <malloc.h>
+#else
+#include <stdlib.h>
+#endif
 
 extern const int32_t psi_rev_ntt1024_12289[1024];           
 extern const int32_t omegainv_rev_ntt1024_12289[1024];
@@ -83,7 +87,7 @@ const char* LatticeCrypto_get_error_message(CRYPTO_STATUS Status)
     } else {
         return mapping[Status].string;
     }
-};
+}
 
 
 void encode_A(const uint32_t* pk, const unsigned char* seed, unsigned char* m)
@@ -273,7 +277,7 @@ static __inline uint32_t LDDecode(int32_t* t)
     }
 
     return ((8*PARAMETER_Q - norm) >> 31) ^ 1;                 // If norm < PARAMETER_Q then return 1, else return 0
-};
+}
 
 
 void Rec(const uint32_t *x, const uint32_t* rvec, unsigned char *key)               
