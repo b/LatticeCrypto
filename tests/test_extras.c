@@ -27,7 +27,7 @@ int64_t cpucycles(void)
     return __rdtsc();
 #elif (OS_TARGET == OS_WIN) && (TARGET == TARGET_ARM)
     return __rdpmccntr64();
-#elif (OS_TARGET == OS_LINUX) && (TARGET == TARGET_AMD64 || TARGET == TARGET_x86)
+#elif ((OS_TARGET == OS_LINUX) || (OS_TARGET == OS_MAC)) && (TARGET == TARGET_AMD64 || TARGET == TARGET_x86)
     unsigned int hi, lo;
 
     asm volatile ("rdtsc\n\t" : "=a" (lo), "=d"(hi));
